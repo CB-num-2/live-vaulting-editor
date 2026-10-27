@@ -110,7 +110,8 @@ function incrementCounter() {
             settings: {
                 editorFontSize: '12px',
                 themeMode: 'dark',
-                tabSize: 4
+                tabSize: 4,
+                liveUpdateInterval: 5000 // default configured parameter scope (5 seconds)
             },
             
             // Autocomplete configuration maps
@@ -364,6 +365,22 @@ function incrementCounter() {
                                 <option value="4" ${state.settings.tabSize === 4 ? 'selected' : ''}>4 Spaces</option>
                             </select>
                         </div>
+
+                        <!-- LIVE TIMING SYNC INTERVAL CONTROL MATRIX (WITH PERFORMANCE CAP OVERRIDE WARNING) -->
+                        <div class="space-y-2">
+                            <label class="text-xs text-zinc-400 block">Live Auto-Save Sync Interval</label>
+                            <select id="setting-live-interval" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none">
+                                <option value="1000" ${state.settings.liveUpdateInterval === 1000 ? 'selected' : ''}>1 Second (Aggressive Sync)</option>
+                                <option value="2000" ${state.settings.liveUpdateInterval === 2000 ? 'selected' : ''}>2 Seconds (Frequent Sync)</option>
+                                <option value="5000" ${state.settings.liveUpdateInterval === 5000 ? 'selected' : ''}>5 Seconds (Standard Default)</option>
+                                <option value="10000" ${state.settings.liveUpdateInterval === 10000 ? 'selected' : ''}>10 Seconds (Relaxed Debounce)</option>
+                            </select>
+                            <div class="p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl mt-1.5">
+                                <p class="text-[10px] text-amber-400/90 leading-relaxed font-sans">
+                                    <strong>⚠️ LOW-END DEVICE WARNING:</strong> Choosing rapid synchronization frequencies (e.g., 1 or 2 seconds) triggers aggressive, continuous browser storage write operations. On legacy hardware or low-end mobile architectures, this can cause operational layout stutters, input thread blocking, or immediate performance throttling.
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="pt-4">
@@ -379,6 +396,7 @@ function incrementCounter() {
         function saveWorkspaceSettings() {
             state.settings.editorFontSize = document.getElementById('setting-font-size').value;
             state.settings.tabSize = parseInt(document.getElementById('setting-tab-size').value, 10);
+            state.settings.liveUpdateInterval = parseInt(document.getElementById('setting-live-interval').value, 10);
             commitStateToDisk();
             triggerToast('Global parameters synced clean');
             returnToDashboardHome();
@@ -438,7 +456,7 @@ function incrementCounter() {
                                 
                                 <button onclick="triggerRuntimePipeline('LIVE')" class="w-full text-left px-3.5 py-2 text-xs hover:bg-zinc-800 flex flex-col gap-0.5 group border-t border-zinc-800/60 mt-1 pt-2">
                                     <span class="font-bold text-emerald-400 flex items-center gap-1.5">LIVE</span>
-                                    <span class="text-[10px] text-zinc-400 font-sans">Hot responsive synchronization engine auto-saving text buffers every 5s into cross-window frames cleanly.</span>
+                                    <span class="text-[10px] text-zinc-400 font-sans">Hot responsive synchronization engine auto-saving text buffers inside operational framework frames cleanly.</span>
                                 </button>
                                 
                                 <button onclick="triggerRuntimePipeline('LIVE_WITH_TOOLS')" class="w-full text-left px-3.5 py-2 text-xs hover:bg-zinc-800 flex flex-col gap-0.5 group">
@@ -771,6 +789,7 @@ function incrementCounter() {
             }
 
             clearTimeout(state.autoSaveTimer);
+            // DYNAMICALLY RESOLVED AUTO-SAVE THROTTLE DEBOUNCE INTERVAL RANGE VALUE FROM STATE PROPERTIES
             state.autoSaveTimer = setTimeout(() => {
                 commitStateToDisk();
                 state.lastSaveTime = new Date().toLocaleTimeString();
@@ -780,7 +799,7 @@ function incrementCounter() {
                     verifiedBadge.innerText = `Auto-saved at ${state.lastSaveTime}`;
                     verifiedBadge.className = 'text-[10px] text-emerald-400 font-mono';
                 }
-            }, 5000);
+            }, state.settings.liveUpdateInterval);
         }
 
         // --- WORKSPACE DIRECT FILE / DIRECTORY CONTROLS ---
