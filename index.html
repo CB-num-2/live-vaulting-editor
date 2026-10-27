@@ -102,11 +102,16 @@ function incrementCounter() {
             projects: {},
             activeProjectId: null,
             activeFileName: null,
-            currentView: 'HOME', // 'HOME' | 'EDITOR' | 'RUN'
+            currentView: 'HOME', // 'HOME' | 'EDITOR' | 'RUN' | 'SETTINGS'
             isRunDropdownOpen: false,
             expandedFolders: { 'assets': true, 'scripts': true },
             autoSaveTimer: null,
             lastSaveTime: null,
+            settings: {
+                editorFontSize: '12px',
+                themeMode: 'dark',
+                tabSize: 4
+            },
             
             // Autocomplete configuration maps
             autocomplete: {
@@ -128,23 +133,15 @@ function incrementCounter() {
                     state.projects = {};
                 }
             }
-
-            // Seed default boilerplate if workspace is blank
-            if (Object.keys(state.projects).length === 0) {
-                const initialId = 'project-' + Date.now();
-                state.projects[initialId] = {
-                    id: initialId,
-                    name: 'Default Production Application',
-                    files: { ...defaultProjectFiles },
-                    updatedAt: new Date().toISOString()
-                };
-                commitStateToDisk();
+            const settingsData = localStorage.getItem(STORAGE_KEY + '_settings');
+            if (settingsData) {
+                try { state.settings = { ...state.settings, ...JSON.parse(settingsData) }; } catch (e) {}
             }
         }
 
         function commitStateToDisk() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
-            // Multi-context cross window trigger framework emission dispatchment
+            localStorage.setItem(STORAGE_KEY + '_settings', JSON.stringify(state.settings));
             window.dispatchEvent(new Event('sandbox_state_mutated_local'));
         }
 
@@ -180,7 +177,6 @@ function incrementCounter() {
             const targetContainer = document.getElementById('app-root');
             if (!targetContainer) return;
 
-            // Route expression signature check: /#run?=t,project=PROJECT_ID_HERE
             if (pathHash.includes('run?=t')) {
                 const matchedId = pathHash.match(/project=([^,]+)/);
                 const projectId = matchedId ? matchedId[1] : null;
@@ -191,6 +187,8 @@ function incrementCounter() {
             } else {
                 if (state.currentView === 'HOME') {
                     renderDashboardView();
+                } else if (state.currentView === 'SETTINGS') {
+                    renderSettingsView();
                 } else {
                     renderEditorWorkspaceView();
                 }
@@ -216,55 +214,82 @@ function incrementCounter() {
                             <p class="text-xs text-zinc-400">Local Multi-Project Component Sandbox Workspace Environment</p>
                         </div>
                         
-                        <button onclick="createNewProjectDashboardAction()" class="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-xs font-bold px-4 py-2 rounded-xl transition duration-150 shadow-lg shadow-emerald-500/10 flex items-center gap-1.5 self-start md:self-auto">
-                            <span>+</span> Create New Project
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="navigateToSettings()" class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-bold px-4 py-2 rounded-xl transition duration-150">
+                                Settings
+                            </button>
+                            <button onclick="createNewProjectDashboardAction()" class="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-xs font-bold px-4 py-2 rounded-xl transition duration-150 shadow-lg shadow-emerald-500/10 flex items-center gap-1.5">
+                                <span>+</span> Create New Project
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Repository Selection Matrix Layout -->
                     <div class="space-y-3">
                         <h2 class="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">Active Architecture Projects</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="project-matrix-grid">
-                            ${Object.keys(state.projects).map(id => {
-                                const proj = state.projects[id];
-                                const count = Object.keys(proj.files).length;
-                                return `
-                                    <div class="bg-zinc-900/40 border border-zinc-900 hover:border-zinc-800 p-5 rounded-2xl flex flex-col justify-between gap-5 transition duration-150 group">
-                                        <div class="space-y-1.5 cursor-pointer flex-1" onclick="openProjectWorkspace('${id}')">
-                                            <div class="flex items-center justify-between">
-                                                <h3 class="text-sm font-semibold text-zinc-200 group-hover:text-emerald-400 transition truncate max-w-[240px]">${proj.name}</h3>
-                                                <span class="text-[10px] font-mono bg-zinc-950 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">${count} tracking file(s)</span>
+                        
+                        ${Object.keys(state.projects).length === 0 ? `
+                            <div class="border border-dashed border-zinc-800 rounded-2xl p-12 text-center space-y-2">
+                                <div class="text-2xl text-zinc-600">📁</div>
+                                <p class="text-sm text-zinc-400 font-mono">No projects found. Minimum bounds configured to 0.</p>
+                                <button onclick="createNewProjectDashboardAction()" class="text-xs text-emerald-400 underline hover:text-emerald-300 transition">Create your first sandbox</button>
+                            </div>
+                        ` : `
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="project-matrix-grid">
+                                ${Object.keys(state.projects).map(id => {
+                                    const proj = state.projects[id];
+                                    const count = Object.keys(proj.files).length;
+                                    return `
+                                        <div class="bg-zinc-900/40 border border-zinc-900 hover:border-zinc-800 p-5 rounded-2xl flex flex-col justify-between gap-5 transition duration-150 group">
+                                            <div class="space-y-1.5 cursor-pointer flex-1" onclick="openProjectWorkspace('${id}')">
+                                                <div class="flex items-center justify-between">
+                                                    <h3 class="text-sm font-semibold text-zinc-200 group-hover:text-emerald-400 transition truncate max-w-[240px]">${proj.name}</h3>
+                                                    <span class="text-[10px] font-mono bg-zinc-950 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">${count} tracking file(s)</span>
+                                                </div>
+                                                <p class="text-[11px] text-zinc-500 font-mono">UUID: ${id}</p>
                                             </div>
-                                            <p class="text-[11px] text-zinc-500 font-mono">UUID: ${id}</p>
+                                            
+                                            <!-- Actions Suite panel row -->
+                                            <div class="flex items-center justify-end gap-2 border-t border-zinc-900/60 pt-3">
+                                                <button onclick="renameProjectDashboardAction('${id}')" class="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800/80 px-2.5 py-1.5 rounded-lg transition">
+                                                    Rename
+                                                </button>
+                                                <button onclick="deleteProjectDashboardAction('${id}')" class="text-[11px] font-mono text-rose-400/80 hover:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/10 px-2.5 py-1.5 rounded-lg transition">
+                                                    Delete Project
+                                                </button>
+                                            </div>
                                         </div>
-                                        
-                                        <!-- Actions Suite panel row -->
-                                        <div class="flex items-center justify-end gap-2 border-t border-zinc-900/60 pt-3">
-                                            <button onclick="renameProjectDashboardAction('${id}')" class="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800/80 px-2.5 py-1.5 rounded-lg transition">
-                                                Rename
-                                            </button>
-                                            <button onclick="deleteProjectDashboardAction('${id}')" class="text-[11px] font-mono text-rose-400/80 hover:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/10 px-2.5 py-1.5 rounded-lg transition">
-                                                Delete Project
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        `}
                     </div>
                 </div>
 
                 <!-- Footer Context Tracking -->
                 <div class="max-w-5xl w-full mx-auto border-t border-zinc-900/60 pt-6 mt-12 text-center text-[11px] text-zinc-600 font-mono">
-                    System Architecture Evaluation Pipeline • Platform Operational Version 2.4.0
+                    System Architecture Evaluation Pipeline • Platform Operational Version 2.5.0
                 </div>
             `;
         }
 
         // --- DASHBOARD ACTIONS PIPELINE ---
+        function navigateToSettings() {
+            state.currentView = 'SETTINGS';
+            renderSettingsView();
+        }
+
+        function returnToDashboardHome() {
+            clearTimeout(state.autoSaveTimer);
+            commitStateToDisk();
+            state.currentView = 'HOME';
+            renderDashboardView();
+        }
+
         function openProjectWorkspace(id) {
             state.activeProjectId = id;
-            state.activeFileName = Object.keys(state.projects[id].files)[0] || 'index.html';
+            const project = state.projects[id];
+            state.activeFileName = Object.keys(project.files)[0] || null;
             state.currentView = 'EDITOR';
             renderEditorWorkspaceView();
         }
@@ -298,10 +323,6 @@ function incrementCounter() {
         }
 
         function deleteProjectDashboardAction(id) {
-            if (Object.keys(state.projects).length <= 1) {
-                alert("Immutable constraint exception. The local database instance workspace requires a minimum of one context container project remaining active.");
-                return;
-            }
             if (!confirm(`Are you absolutely sure you want to permanently clear project "${state.projects[id].name}" from browser environment local storage layers?`)) return;
 
             delete state.projects[id];
@@ -310,19 +331,71 @@ function incrementCounter() {
             triggerToast('Purged structural profile completely from disk index layers', 'warn');
         }
 
-        // --- VIEW 2: FULL FEATURED PLATFORM EDITOR / WORKSPACE MANAGER ---
+        // --- VIEW 2: GLOBAL WORKSPACE SETTINGS CONFIGURATOR ---
+        function renderSettingsView() {
+            state.currentView = 'SETTINGS';
+            const root = document.getElementById('app-root');
+
+            root.className = "w-full h-screen bg-zinc-950 flex flex-col justify-between overflow-y-auto p-6 md:p-12 select-none font-mono";
+            root.innerHTML = `
+                <div class="max-w-xl w-full mx-auto space-y-8 animate-fade-in">
+                    <div class="flex items-center justify-between border-b border-zinc-900 pb-4">
+                        <h2 class="text-sm font-bold text-zinc-100 uppercase tracking-widest">Workspace Global Settings</h2>
+                        <button onclick="returnToDashboardHome()" class="text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-lg text-zinc-400 transition">
+                            Back
+                        </button>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="space-y-2">
+                            <label class="text-xs text-zinc-400 block">Editor Font Size</label>
+                            <select id="setting-font-size" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none">
+                                <option value="11px" ${state.settings.editorFontSize === '11px' ? 'selected' : ''}>11px (Compact)</option>
+                                <option value="12px" ${state.settings.editorFontSize === '12px' ? 'selected' : ''}>12px (Standard)</option>
+                                <option value="14px" ${state.settings.editorFontSize === '14px' ? 'selected' : ''}>14px (Large)</option>
+                                <option value="16px" ${state.settings.editorFontSize === '16px' ? 'selected' : ''}>16px (Accessible)</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-xs text-zinc-400 block">Tab Indentation Spacing</label>
+                            <select id="setting-tab-size" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none">
+                                <option value="2" ${state.settings.tabSize === 2 ? 'selected' : ''}>2 Spaces</option>
+                                <option value="4" ${state.settings.tabSize === 4 ? 'selected' : ''}>4 Spaces</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="pt-4">
+                        <button onclick="saveWorkspaceSettings()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-xs font-bold py-2.5 rounded-xl transition">
+                            Save Workspace Parameters
+                        </button>
+                    </div>
+                </div>
+                <div></div>
+            `;
+        }
+
+        function saveWorkspaceSettings() {
+            state.settings.editorFontSize = document.getElementById('setting-font-size').value;
+            state.settings.tabSize = parseInt(document.getElementById('setting-tab-size').value, 10);
+            commitStateToDisk();
+            triggerToast('Global parameters synced clean');
+            returnToDashboardHome();
+        }
+
+        // --- VIEW 3: FULL FEATURED PLATFORM EDITOR / WORKSPACE MANAGER ---
         function renderEditorWorkspaceView() {
             const root = document.getElementById('app-root');
             const project = state.projects[state.activeProjectId];
             
             if (!project) {
-                // Fail-safe bounce tracking mechanism if reference falls out of pointer scopes
                 state.currentView = 'HOME';
                 renderDashboardView();
                 return;
             }
 
-            const currentCodeText = project.files[state.activeFileName] || '';
+            const currentCodeText = state.activeFileName ? (project.files[state.activeFileName] || '') : '';
 
             root.className = "w-full h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden select-none animate-fade-in";
             root.innerHTML = `
@@ -332,20 +405,15 @@ function incrementCounter() {
                         <button onclick="returnToDashboardHome()" class="p-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition" title="Return to Core Dashboard Panel Grid">
                             ← Home
                         </button>
-                        <div class="h-4 w-px bg-zinc-800"></div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-zinc-500 text-xs">active:</span>
-                            <span class="text-xs font-semibold text-zinc-200">${project.name}</span>
-                        </div>
                     </div>
 
                     <!-- DROP-DOWN TRIGGER CONSOLE CONTAINER ONLY -->
                     <div class="flex items-center gap-3 relative">
                         <span id="save-indicator-badge" class="text-[10px] text-zinc-500 font-mono">All operations verified</span>
                         
-                        <!-- DROP-DOWN EXECUTION LAUNCH TRIGGER ELEMENT (CRITICAL RULE: Dropdown only, no split system) -->
+                        <!-- DROP-DOWN EXECUTION LAUNCH TRIGGER ELEMENT -->
                         <div class="relative">
-                            <button onclick="toggleRuntimeOptionDropdown(event)" class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-400 font-bold px-4 py-1.5 rounded-xl text-xs transition duration-150 flex items-center gap-2">
+                            <button onclick="toggleRuntimeOptionDropdown(event)" ${!state.activeFileName ? 'disabled' : ''} class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-400 font-bold px-4 py-1.5 rounded-xl text-xs transition duration-150 flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none">
                                 <span>Run Application</span>
                                 <svg class="w-3 h-3 text-emerald-500 transition-transform duration-200 ${state.isRunDropdownOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path>
@@ -369,12 +437,12 @@ function incrementCounter() {
                                 </button>
                                 
                                 <button onclick="triggerRuntimePipeline('LIVE')" class="w-full text-left px-3.5 py-2 text-xs hover:bg-zinc-800 flex flex-col gap-0.5 group border-t border-zinc-800/60 mt-1 pt-2">
-                                    <span class="font-bold text-emerald-400 flex items-center gap-1.5">LIVE <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span></span>
+                                    <span class="font-bold text-emerald-400 flex items-center gap-1.5">LIVE</span>
                                     <span class="text-[10px] text-zinc-400 font-sans">Hot responsive synchronization engine auto-saving text buffers every 5s into cross-window frames cleanly.</span>
                                 </button>
                                 
                                 <button onclick="triggerRuntimePipeline('LIVE_WITH_TOOLS')" class="w-full text-left px-3.5 py-2 text-xs hover:bg-zinc-800 flex flex-col gap-0.5 group">
-                                    <span class="font-bold text-emerald-400 flex items-center gap-1.5">LIVE WITH TOOLS <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span></span>
+                                    <span class="font-bold text-emerald-400 flex items-center gap-1.5">LIVE WITH TOOLS</span>
                                     <span class="text-[10px] text-zinc-400 font-sans">Full compilation suite processing real-time updates while monitoring diagnostics pipelines.</span>
                                 </button>
                             </div>
@@ -385,11 +453,14 @@ function incrementCounter() {
                 <!-- WORKSPACE STRUCTURAL CENTER DIVISION -->
                 <div class="flex-1 w-full flex flex-row overflow-hidden">
                     
-                    <!-- REPOSITORY INTEGRATED MULTI-LEVEL MANAGER (FOLDERS + FILE MATRIX) -->
+                    <!-- REPOSITORY INTEGRATED MULTI-LEVEL MANAGER -->
                     <aside class="w-64 border-r border-zinc-900 bg-zinc-900/10 flex flex-col shrink-0 font-mono">
                         <div class="p-3 border-b border-zinc-900 flex items-center justify-between bg-zinc-900/10">
                             <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Workspace Hierarchy</span>
                             <div class="flex items-center gap-1">
+                                <button onclick="triggerFileMovingWorkflowPrompt()" ${Object.keys(project.files).length === 0 ? 'disabled' : ''} class="p-1 rounded text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition disabled:opacity-20" title="Move or Rename File Path Node">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                                </button>
                                 <button onclick="triggerFileCreationPrompt()" class="p-1 rounded text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 transition" title="Create Specified File Path">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                 </button>
@@ -398,8 +469,11 @@ function incrementCounter() {
 
                         <!-- Content Node Listing Context Stream Window -->
                         <div class="flex-1 overflow-y-auto p-2" id="file-system-tree-mount">
-                            <!-- Dynamic compilation loop processing multi-level paths below -->
-                            ${compileFileSystemLayoutView(project.files)}
+                            ${Object.keys(project.files).length === 0 ? `
+                                <div class="text-[11px] text-zinc-600 p-4 text-center border border-dashed border-zinc-900 rounded-xl m-2">
+                                    No tracked file paths present (0 minimum configuration cap).
+                                </div>
+                            ` : compileFileSystemLayoutView(project.files)}
                         </div>
                     </aside>
 
@@ -407,20 +481,25 @@ function incrementCounter() {
                     <main class="flex-1 h-full flex flex-col bg-zinc-950 overflow-hidden relative">
                         <div class="h-8 border-b border-zinc-900/60 bg-zinc-900/20 px-4 flex items-center justify-between text-xs text-zinc-500 font-mono shrink-0">
                             <div>
-                                <span class="text-zinc-600">repository://</span><span class="text-zinc-300">${state.activeFileName}</span>
+                                <span class="text-zinc-600">repository://</span><span class="text-zinc-300">${state.activeFileName || 'blank_workspace'}</span>
                             </div>
-                            <span class="text-[10px] text-emerald-500/80 uppercase tracking-wide">Tab Autocomplete Ready</span>
+                            <span class="text-[10px] text-zinc-600 uppercase tracking-wide">Tab Autocomplete Ready</span>
                         </div>
 
                         <!-- Text Workzone Matrix Container Component -->
                         <div class="flex-1 w-full flex flex-row overflow-hidden p-1 relative">
-                            <div id="line-counter-rail" class="w-11 py-3 text-right font-mono text-xs text-zinc-700 pr-3.5 border-r border-zinc-900 pointer-events-none line-clamp-none h-full overflow-hidden leading-6">
+                            <div id="line-counter-rail" class="w-11 py-3 text-right font-mono text-zinc-700 pr-3.5 border-r border-zinc-900 pointer-events-none line-clamp-none h-full overflow-hidden leading-6" style="font-size: ${state.settings.editorFontSize};">
                                 1
                             </div>
                             
                             <div class="flex-1 h-full relative">
-                                <textarea id="sandbox-ide-textarea" oninput="handleWorkspaceTextareaModification(this)" onkeydown="interceptKeystrokeActions(event, this)" onscroll="syncGutterRailScroll(this)" class="w-full h-full bg-transparent text-zinc-300 p-3 pt-3 font-mono text-xs focus:outline-none resize-none leading-6 whitespace-pre overflow-x-auto overflow-y-auto selection:bg-zinc-800" spellcheck="false" placeholder="Enter clean standard multi-file source block configurations...">${currentCodeText}</textarea>
-                                
+                                ${state.activeFileName ? `
+                                    <textarea id="sandbox-ide-textarea" oninput="handleWorkspaceTextareaModification(this)" onkeydown="interceptKeystrokeActions(event, this)" onscroll="syncGutterRailScroll(this)" class="w-full h-full bg-transparent text-zinc-300 p-3 pt-3 font-mono focus:outline-none resize-none leading-6 whitespace-pre overflow-x-auto overflow-y-auto selection:bg-zinc-800" style="font-size: ${state.settings.editorFontSize};" spellcheck="false" placeholder="Enter clean standard multi-file source block configurations...">${currentCodeText}</textarea>
+                                ` : `
+                                    <div class="w-full h-full flex flex-col items-center justify-center text-zinc-600 text-xs font-mono">
+                                        Open or create a workspace file node to initialize development streams.
+                                    </div>
+                                `}
                                 <!-- AUTO-COMPLETE OVERLAY INTERFACE PANE -->
                                 <div id="autocomplete-suggestion-box" class="absolute hidden w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 font-mono text-xs max-h-48 overflow-y-auto"></div>
                             </div>
@@ -432,11 +511,44 @@ function incrementCounter() {
             updateWorkspaceLineCounters();
         }
 
+        // --- FILE-MOVING & PATH REFACTORS ENGINE ---
+        function triggerFileMovingWorkflowPrompt() {
+            if (!state.activeFileName) return;
+            const originalPath = state.activeFileName;
+            const targetPathInput = prompt(`Enter new absolute path for the targeted node location context [Current: "${originalPath}"]:`, originalPath);
+            
+            if (!targetPathInput || targetPathInput.trim() === "" || targetPathInput.trim() === originalPath) return;
+            const normalizedTarget = targetPathInput.trim();
+            const project = state.projects[state.activeProjectId];
+
+            if (project.files[normalizedTarget]) {
+                alert("ConflictException. A structural element or index signature is already registered at that path identifier destination.");
+                return;
+            }
+
+            // Transfer block data context cleanly across pointer frames
+            const bufferedContent = project.files[originalPath];
+            project.files[normalizedTarget] = bufferedContent;
+            delete project.files[originalPath];
+
+            // Re-expand target path folder tracks dynamically
+            const elements = normalizedTarget.split('/');
+            let recursiveString = '';
+            for(let i=0; i < elements.length - 1; i++) {
+                recursiveString = recursiveString ? `${recursiveString}/${elements[i]}` : elements[i];
+                state.expandedFolders[recursiveString] = true;
+            }
+
+            commitStateToDisk();
+            state.activeFileName = normalizedTarget;
+            renderEditorWorkspaceView();
+            triggerToast('Refactored operational path hierarchy tracks cleanly');
+        }
+
         // --- SUB-ROUTINE: RECURSIVE ARCHITECTURE PATH BUILDER FOR NESTED FOLDERS ---
         function compileFileSystemLayoutView(flatFilesMap) {
             const structure = {};
             
-            // Re-map flat dictionary entries into nested hierarchical layout components
             Object.keys(flatFilesMap).forEach(path => {
                 const elements = path.split('/');
                 let pointer = structure;
@@ -452,11 +564,9 @@ function incrementCounter() {
                 }
             });
 
-            // Structural block generation string factory routines
             function traceNodeHierarchy(node, currentPrefix = '') {
                 let segmentHTML = '';
                 const keys = Object.keys(node).sort((a, b) => {
-                    // Directories sort to top level views
                     const aIsFile = node[a].__isFile === true;
                     const bIsFile = node[b].__isFile === true;
                     if (aIsFile !== bIsFile) return aIsFile ? 1 : -1;
@@ -480,11 +590,9 @@ function incrementCounter() {
                                     <span class="truncate">${key}</span>
                                     ${isMainEntry ? '<span class="text-[8px] bg-zinc-950 px-1 border border-zinc-800 rounded font-bold text-zinc-500 scale-90">main</span>' : ''}
                                 </div>
-                                ${!isMainEntry ? `
-                                    <button onclick="purgeSpecifiedFile(event, '${item.fullPath}')" class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-500 hover:text-rose-400 transition" title="Delete file node">
-                                        ✕
-                                    </button>
-                                ` : ''}
+                                <button onclick="purgeSpecifiedFile(event, '${item.fullPath}')" class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-500 hover:text-rose-400 transition" title="Delete file node">
+                                    ✕
+                                </button>
                             </div>
                         `;
                     } else {
@@ -521,7 +629,6 @@ function incrementCounter() {
             const cursorPosition = textarea.selectionStart;
             const textValue = textarea.value;
             
-            // Extract the active textual token working back to whitespace constraints
             const textBoundary = textValue.substring(0, cursorPosition);
             const lineTokens = textBoundary.split(/[\s,;<>'"\(\)]/);
             const activeToken = lineTokens[lineTokens.length - 1];
@@ -534,7 +641,6 @@ function incrementCounter() {
                 return;
             }
 
-            // Match current input against suggestion index pools
             const filteredMatches = state.autocomplete.suggestions.filter(term => 
                 term.toLowerCase().startsWith(activeToken.toLowerCase()) && term.toLowerCase() !== activeToken.toLowerCase()
             );
@@ -566,7 +672,6 @@ function incrementCounter() {
                 `;
             }).join('');
 
-            // Position context panel relative to active editor layout framework blocks
             panel.classList.remove('hidden');
             panel.style.bottom = "24px";
             panel.style.left = "24px";
@@ -602,7 +707,6 @@ function incrementCounter() {
 
         function interceptKeystrokeActions(e, textarea) {
             if (state.autocomplete.visible) {
-                // Control suggestion matching focus levels via Tab/Arrows/Enter keys
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     state.autocomplete.activeIndex = (state.autocomplete.activeIndex + 1) % state.autocomplete.filtered.length;
@@ -629,13 +733,13 @@ function incrementCounter() {
                 }
             }
             
-            // Standard code indentation support mapping structures
             if (e.key === 'Tab') {
                 e.preventDefault();
                 const pos = textarea.selectionStart;
                 const value = textarea.value;
-                textarea.value = value.substring(0, pos) + "    " + value.substring(pos);
-                textarea.selectionStart = textarea.selectionEnd = pos + 4;
+                const spacer = " ".repeat(state.settings.tabSize);
+                textarea.value = value.substring(0, pos) + spacer + value.substring(pos);
+                textarea.selectionStart = textarea.selectionEnd = pos + state.settings.tabSize;
                 handleWorkspaceTextareaModification(textarea);
             }
         }
@@ -703,7 +807,6 @@ function incrementCounter() {
                 return;
             }
 
-            // Set simple language boilerplate blocks based on extension configurations
             const formatExtension = targetPath.split('.').pop().toLowerCase();
             let bodyStub = `/* Module Code Space */`;
             if (formatExtension === 'html' || formatExtension === 'htm') {
@@ -712,7 +815,6 @@ function incrementCounter() {
                 bodyStub = `{\n  "status": "active"\n}`;
             }
 
-            // Ensure parent directories expand on tree layout calculations
             const segments = targetPath.split('/');
             let routeTracking = '';
             for (let i = 0; i < segments.length - 1; i++) {
@@ -729,25 +831,17 @@ function incrementCounter() {
 
         function purgeSpecifiedFile(e, path) {
             e.stopPropagation();
-            if (path === 'index.html') return;
-
             if (!confirm(`Are you certain you want to remove "${path}" node mappings from project tree arrays?`)) return;
 
             delete state.projects[state.activeProjectId].files[path];
             commitStateToDisk();
 
             if (state.activeFileName === path) {
-                state.activeFileName = 'index.html';
+                const remaining = Object.keys(state.projects[state.activeProjectId].files);
+                state.activeFileName = remaining.length > 0 ? remaining[0] : null;
             }
             renderEditorWorkspaceView();
             triggerToast('Dropped pathway assignment item index parameters', 'info');
-        }
-
-        function returnToDashboardHome() {
-            clearTimeout(state.autoSaveTimer);
-            commitStateToDisk();
-            state.currentView = 'HOME';
-            renderDashboardView();
         }
 
         // --- SUB-ROUTINE: RUN CONSOLE DROPDOWN CONTROLLERS ---
@@ -766,7 +860,6 @@ function incrementCounter() {
             }
         }
 
-        // Automatically hide relative overlay drop menus upon background blur events
         window.addEventListener('click', () => {
             if (state.isRunDropdownOpen) {
                 state.isRunDropdownOpen = false;
@@ -795,7 +888,6 @@ function incrementCounter() {
             const launchLink = `${currentHostOrigin}#${setupRouteString}`;
             const operationalWindowProperties = "width=1100,height=800,menubar=no,status=no,toolbar=no,location=no,scrollbars=yes,resizable=yes";
             
-            // CONSTRAINT GUARANTEE: Force separate program window architecture layer frames
             const runtimePopupPointer = window.open(launchLink, `Engine_Sandbox_Instance_${state.activeProjectId}_${profile}`, operationalWindowProperties);
             
             if (runtimePopupPointer) {
@@ -805,7 +897,7 @@ function incrementCounter() {
             }
         }
 
-        // --- VIEW 3: Programmatic Independent Isolated Runtime Context Frames ---
+        // ---獨立運行渲染程序 (STANDALONE RUNTIME VIEWPORT ENGINE) ---
         function renderStandAloneRuntimeView(projectId, isLive, withTools) {
             const root = document.getElementById('app-root');
             
@@ -835,10 +927,6 @@ function incrementCounter() {
                 <!-- SANDBOX MAIN RENDER CORE WINDOW IFRAME -->
                 <div class="flex-1 h-full flex flex-col relative bg-zinc-900">
                     <iframe id="isolated-runtime-canvas" class="w-full h-full bg-white" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
-                    <div class="absolute bottom-4 left-4 bg-zinc-950/90 backdrop-blur border border-zinc-800 text-[10px] px-3 py-1.5 rounded-full flex items-center gap-2 shadow-2xl">
-                        <span class="w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500 animate-ping' : 'bg-zinc-600'}"></span>
-                        <span class="tracking-widest text-zinc-400 font-bold uppercase">${isLive ? 'HOT REACTIVE LIVE CONTEXT ACTIVE' : 'STATIC COLD MODE'}</span>
-                    </div>
                 </div>
 
                 <!-- DIAGNOSTIC PANE OVERLAY SIDEBAR -->
@@ -874,7 +962,6 @@ function incrementCounter() {
 
             const viewPortFrame = document.getElementById('isolated-runtime-canvas');
 
-            // Resource compilation resolver system for relative pathways mapping calculations
             function executeRenderPipeline() {
                 const refreshedState = fetchFreshStoragePayload();
                 if (!refreshedState || !refreshedState[projectId]) return;
@@ -882,17 +969,14 @@ function incrementCounter() {
                 const datasetFiles = refreshedState[projectId].files;
                 let primaryHTMLCode = datasetFiles['index.html'] || '<h3>Missing index.html configuration profiles</h3>';
 
-                // Intercept relative asset paths inside the index file structure and parse inline values smoothly
                 Object.keys(datasetFiles).forEach(filepath => {
                     if (filepath === 'index.html') return;
 
-                    // Match scripts imports
                     if (filepath.endsWith('.js')) {
                         const escapedPath = filepath.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                         const searchRegex = new RegExp(`src=["']${escapedPath}["']`, 'g');
                         primaryHTMLCode = primaryHTMLCode.replace(searchRegex, `src="data:text/javascript;base64,${btoa(unescape(encodeURIComponent(datasetFiles[filepath])))}"`);
                     }
-                    // Match stylesheet styling nodes
                     if (filepath.endsWith('.css')) {
                         const escapedPath = filepath.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                         const searchRegex = new RegExp(`href=["']${escapedPath}["']`, 'g');
@@ -912,10 +996,8 @@ function incrementCounter() {
                 viewPortFrame.srcdoc = primaryHTMLCode;
             }
 
-            // Initial instantiation trigger execution block
             executeRenderPipeline();
 
-            // Stream state listeners hook mapping for reactive hot swaps update layers
             if (isLive) {
                 window.addEventListener('storage', (e) => {
                     if (e.key === STORAGE_KEY) executeRenderPipeline();
