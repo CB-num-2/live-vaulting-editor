@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSandbox - Project File Manager & Live Editor</title>
+    <!-- Tailwind CSS for modern UI design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+        /* Custom scrollbar styling for a premium dark IDE feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #18181b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col overflow-hidden">
+
+    <!-- TOAST NOTIFICATION CONTAINER (Custom modal replacement instead of alert) -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- MAIN APP ROUTER CORE -->
+    <div id="app-root" class="w-full h-screen flex flex-col">
+        <!-- Content will be dynamically rendered here based on Hash Routing -->
+    </div>
+
+    <script>
+        // --- STORAGE & STATE MANAGEMENT ---
+        const STORAGE_KEY = 'dev_sandbox_projects_v1';
+        
+        // Default boilerplate template for new projects
+        const defaultFiles = {
+            'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Live App</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: system-ui; }
+        .card { background: #1e293b; border: 1px solid #334155; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+    <div class="card p-8 rounded-2xl shadow-2xl max-w-md border animate-fade-in">
+        <div class="text-5xl mb-4">🚀</div>
+        <h1 id="title" class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400 mb-2">
+            Hello Sandbox!
+        </h1>
+        <p class="text-slate-400 mb-6">
+            Try modifying this file or changing this text in the editor. Watch live updates trigger beautifully.
+        </p>
+        <button onclick="toggleColor()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-6 py-2.5 rounded-xl transition duration-200 shadow-lg shadow-emerald-500/20">
+            Click Me
+        </button>
+        <div id="status" class="mt-4 text-sm text-slate-500 font-mono">State is preserved during live updates</div>
+    </div>
+
+    <script>
+        let counter = 0;
+        function toggleColor() {
+            counter++;
+            document.getElementById('status').innerText = 'Button clicked ' + counter + ' times!';
+        }
+    <\/script>
+</body>
+</html>`,
+            'styles.css': `/* Custom Application Stylesheet */
+body {
+    margin: 0;
+    padding: 0;
+}`,
+            'readme.md': `# My Sandbox Project
+This is a standard multi-file development workspace environment.`
+        };
+
+        let state = {
+            projects: {},
+            activeProjectId: null,
+            activeFileName: null,
+            isDropdownOpen: false,
+            autoSaveTimer: null,
+            lastSaveTime: null
+        };
+
+        // Initialize and load application data
+        function loadState() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                try {
+                    state.projects = JSON.parse(data);
+                } catch(e) {
+                    state.projects = {};
+                }
+            }
+            
+            // Seed a sample project if none exists
+            if (Object.keys(state.projects).length === 0) {
+                const sampleId = 'proj-' + Date.now();
+                state.projects[sampleId] = {
+                    id: sampleId,
+                    name: 'Demo Web Application',
+                    files: { ...defaultFiles },
+                    createdAt: new Date().toISOString()
+                };
+                saveStateToStorage();
+            }
+
+            // Set defaults if missing
+            if (!state.activeProjectId || !state.projects[state.activeProjectId]) {
+                state.activeProjectId = Object.keys(state.projects)[0];
+            }
+            if (state.activeProjectId && (!state.activeFileName || !state.projects[state.activeProjectId].files[state.activeFileName])) {
+                state.activeFileName = Object.keys(state.projects[state.activeProjectId].files)[0] || 'index.html';
+            }
+        }
+
+        function saveStateToStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
+            window.dispatchEvent(new Event('storage_update_local'));
+        }
+
+        // --- CUSTOM TOAST NOTIFICATION CONTROL ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toast = document.createElement('div');
+            toast.className = `flex items-center p-4 rounded-xl shadow-xl transition-all duration-300 transform translate-y-2 opacity-0 text-sm font-medium ${
+                type === 'success' ? 'bg-zinc-900 border border-emerald-500/30 text-emerald-400' :
+                type === 'info' ? 'bg-zinc-900 border border-blue-500/30 text-blue-400' :
+                'bg-zinc-900 border border-zinc-700 text-zinc-300'
+            }`;
+            
+            toast.innerHTML = `
+                <span class="mr-2">${type === 'success' ? '✓' : 'ℹ'}</span>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 50);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-4px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- ROUTING HANDLER (EDITOR VS RUN WINDOW MODE) ---
+        function router() {
+            const hash = window.location.hash;
+            const root = document.getElementById('app-root');
+            
+            // Syntax requested: /#run?=t,project=PROJECT_ID_HERE
+            if (hash.includes('run?=t')) {
+                // Parse options embedded in custom route parameters
+                const projectIdMatch = hash.match(/project=([^,]+)/);
+                const projectId = projectIdMatch ? projectIdMatch[1] : null;
+                
+                const isLive = hash.includes(',live=true');
+                const withTools = hash.includes(',tools=true');
+                
+                renderRunMode(projectId, isLive, withTools);
+            } else {
+                renderEditorMode();
+            }
+        }
+
+        // --- RUN RUNTIME VIEWPORT ---
+        function renderRunMode(projectId, isLive, withTools) {
+            const root = document.getElementById('app-root');
+            
+            // Fetch configuration directly from standard centralized state store
+            const localData = localStorage.getItem(STORAGE_KEY);
+            let projects = {};
+            if (localData) {
+                try { projects = JSON.parse(localData); } catch(e) {}
+            }
+            
+            const project = projects[projectId];
+            if (!project) {
+                root.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full bg-zinc-950 p-6 text-center">
+                        <div class="text-zinc-600 text-6xl mb-4">⚠️</div>
+                        <h1 class="text-xl font-bold text-zinc-200">Workspace Project Not Found</h1>
+                        <p class="text-zinc-500 text-sm mt-1 max-w-sm">The requested container might have been deleted or missing from local storage context.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Build structural configuration interface matching constraints
+            root.className = "w-full h-screen flex flex-row bg-black overflow-hidden";
+            root.innerHTML = `
+                <!-- Execution Subsystem Window Iframe Canvas -->
+                <div class="flex-1 h-full flex flex-col relative bg-zinc-900">
+                    <iframe id="runtime-viewport" class="w-full h-full bg-white" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+                    ${isLive ? `
+                        <div class="absolute bottom-4 left-4 bg-zinc-950/90 backdrop-blur border border-emerald-500/30 text-emerald-400 text-xs px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                            <span class="font-mono tracking-wider font-semibold">LIVE DESKTOP MODE ACTIVE</span>
+                        </div>
+                    ` : `
+                        <div class="absolute bottom-4 left-4 bg-zinc-950/90 backdrop-blur border border-zinc-700 text-zinc-400 text-xs px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+                            <span class="w-2 h-2 rounded-full bg-zinc-500"></span>
+                            <span class="font-mono tracking-wider font-semibold">STATIC RUN</span>
+                        </div>
+                    `}
+                </div>
+                
+                <!-- Side Panel Tools Menu Layout Overlay Toggle -->
+                ${withTools ? `
+                    <div class="w-80 h-full border-l border-zinc-800 bg-zinc-950 flex flex-col shrink-0 animate-slide-in">
+                        <div class="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v8a2 2 0 11-4 0V4zM4 13a2 2 0 012-2h2a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2v-3z"></path></svg>
+                                Runtime Tool Suite
+                            </h3>
+                            <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 font-mono">v1.2</span>
+                        </div>
+                        <div class="p-4 flex-1 overflow-y-auto space-y-4">
+                            <!-- Diagnostics Monitor Widget Layout Configuration Block -->
+                            <div class="space-y-2">
+                                <label class="text-[11px] font-bold uppercase text-zinc-500 tracking-tight">Active Context Bundle</label>
+                                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-1.5 text-xs">
+                                    <div class="flex justify-between"><span class="text-zinc-500">Project Target:</span><span class="text-zinc-300 font-medium truncate max-w-[120px]">${project.name}</span></div>
+                                    <div class="flex justify-between"><span class="text-zinc-500">Sync Channel:</span><span class="text-zinc-400 font-mono">${isLive ? 'Reactive Event' : 'Manual Push'}</span></div>
+                                    <div class="flex justify-between"><span class="text-zinc-500">Active Entry:</span><span class="text-teal-400 font-mono">index.html</span></div>
+                                </div>
+                            </div>
+                            <!-- Simulation Diagnostic Log Component Stream Window -->
+                            <div class="space-y-2 flex-1 flex flex-col min-h-[250px]">
+                                <label class="text-[11px] font-bold uppercase text-zinc-500 tracking-tight">Virtual System Logs</label>
+                                <div id="sys-logs" class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex-1 font-mono text-[11px] text-zinc-400 overflow-y-auto space-y-1">
+                                    <div class="text-zinc-500">[00:00:01] Initialization sequence initialized...</div>
+                                    <div class="text-emerald-500">[00:00:01] Hooked storage listener. Ready.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+
+            const iframe = document.getElementById('runtime-viewport');
+
+            // Injector function pipeline that builds current file bundle output inside iframe context target
+            function compileAndRun() {
+                const updatedLocalData = localStorage.getItem(STORAGE_KEY);
+                let currentProjects = {};
+                if (updatedLocalData) {
+                    try { currentProjects = JSON.parse(updatedLocalData); } catch(e) {}
+                }
+                const currentProj = currentProjects[projectId];
+                if (!currentProj) return;
+
+                const rawHTML = currentProj.files['index.html'] || '<h1>No index.html target standard baseline exists within project file tree structure context</h1>';
+                
+                if (isLive) {
+                    // LIVE updates inject tracking handler code scripts inside sandboxed iframe without page reload destruction lifecycle
+                    const logContainer = document.getElementById('sys-logs');
+                    if (logContainer) {
+                        const timeStr = new Date().toLocaleTimeString();
+                        logContainer.innerHTML += `<div class="text-zinc-400">[${timeStr}] Synced modifications cleanly into active window context tree...</div>`;
+                        logContainer.scrollTop = logContainer.scrollHeight;
+                    }
+                    
+                    // Rewrite content smoothly using srcdoc engine to update content node architecture smoothly
+                    iframe.srcdoc = rawHTML;
+                } else {
+                    // Standard manual run mode instantiation lifecycle assignment parameters loop logic
+                    iframe.srcdoc = rawHTML;
+                }
+            }
+
+            // Initial instantiation trigger execution block
+            compileAndRun();
+
+            // Reactive stream listener hook structure for LIVE instant updates processing framework
+            if (isLive) {
+                window.addEventListener('storage', (e) => {
+                    if (e.key === STORAGE_KEY) {
+                        compileAndRun();
+                    }
+                });
+                // Capture local cross-tab triggers if ran on same thread context pipeline
+                window.addEventListener('storage_update_local', () => {
+                    compileAndRun();
+                });
+            }
+        }
+
+        // --- MAIN WORKSPACE EDITOR RENDER PIPELINE ---
+        function renderEditorMode() {
+            loadState();
+            const root = document.getElementById('app-root');
+            
+            const activeProject = state.projects[state.activeProjectId];
+            const currentFileContent = activeProject ? activeProject.files[state.activeFileName] || '' : '';
+            const projectFileList = activeProject ? Object.keys(activeProject.files) : [];
+
+            root.className = "w-full h-screen flex flex-col bg-zinc-950 text-zinc-100 overflow-hidden";
+            root.innerHTML = `
+                <!-- MAIN WORKSPACE HEADER BAR (GitHub Style Top Navigation Menu Bar Container) -->
+                <header class="h-14 border-b border-zinc-800 bg-zinc-900/60 backdrop-blur px-4 flex items-center justify-between shrink-0 select-none">
+                    <div class="flex items-center gap-6">
+                        <!-- Branding Token Identifier -->
+                        <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.hash=''">
+                            <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/10">
+                                <svg class="w-4 h-4 text-zinc-950 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                            </div>
+                            <span class="font-bold tracking-tight text-sm text-zinc-100 font-mono">DevSandbox</span>
+                        </div>
+                        
+                        <!-- Dynamic Project Workspace Selector Component System -->
+                        <div class="flex items-center gap-2 border-l border-zinc-800 pl-6">
+                            <select id="project-selector" onchange="switchProject(this.value)" class="bg-zinc-800/80 border border-zinc-700/60 rounded-lg px-3 py-1 text-xs font-medium text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer max-w-[200px]">
+                                ${Object.keys(state.projects).map(id => `
+                                    <option value="${id}" ${id === state.activeProjectId ? 'selected' : ''}>${state.projects[id].name}</option>
+                                `).join('')}
+                            </select>
+                            <button onclick="promptCreateProject()" class="p-1 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition duration-150" title="Create New Container Project Workspace">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                            <button onclick="promptDeleteProject()" class="p-1 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition duration-150" title="Delete Active Project Container Container">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- RUNTIME EXECUTOR BUTTON ACTIONS CONSOLE CONFIGURATION CONTROL DROPDOWN CONTAINER -->
+                    <div class="flex items-center gap-3 relative">
+                        <div id="save-status-text" class="text-xs text-zinc-500 font-mono tracking-tight mr-2">
+                            ${state.lastSaveTime ? `Saved at ${state.lastSaveTime}` : 'All changes tracked'}
+                        </div>
+                        
+                        <!-- Primary Split Button Dropdown Layout System Trigger Component -->
+                        <div class="inline-flex rounded-lg shadow-sm bg-zinc-900 border border-zinc-700/80 overflow-visible">
+                            <button onclick="executeAction('RELOAD')" class="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold px-4 py-1.5 rounded-l-lg text-xs transition duration-150 flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Run Project
+                            </button>
+                            <button onclick="toggleDropdown(event)" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-2 py-1.5 rounded-r-lg border-l border-zinc-700/80 transition duration-150 flex items-center justify-center">
+                                <svg class="w-3.5 h-3.5 transition-transform duration-200 ${state.isDropdownOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </div>
+
+                        <!-- Dropdown Menu Layer Block Placement View Config Panel -->
+                        <div id="run-dropdown-panel" class="absolute right-0 top-11 w-64 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl py-2 z-50 transform origin-top-right transition-all duration-150 ${state.isDropdownOpen ? 'scale-100 opacity-100 block' : 'scale-95 opacity-0 hidden'}">
+                            <div class="px-3 py-1.5 border-b border-zinc-800 mb-1">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Target Pipeline Modes</span>
+                            </div>
+                            
+                            <!-- RELOAD ACTION INTERFACE LINK -->
+                            <button onclick="executeAction('RELOAD')" class="w-full text-left px-4 py-2 text-xs text-zinc-200 hover:bg-zinc-800/80 flex flex-col gap-0.5 group">
+                                <span class="font-semibold text-zinc-100 group-hover:text-emerald-400 transition-colors">RELOAD</span>
+                                <span class="text-[10px] text-zinc-400">Launch standard build environment instance window. Requires manual restart sequence to refresh codebase changes.</span>
+                            </button>
+                            
+                            <!-- RELOAD WITH TOOLS ACTION INTERFACE LINK -->
+                            <button onclick="executeAction('RELOAD_WITH_TOOLS')" class="w-full text-left px-4 py-2 text-xs text-zinc-200 hover:bg-zinc-800/80 flex flex-col gap-0.5 group">
+                                <span class="font-semibold text-zinc-100 group-hover:text-emerald-400 transition-colors">RELOAD WITH TOOLS</span>
+                                <span class="text-[10px] text-zinc-400">Standard runtime target instantiation injected with interactive right-side diagnostic system console suite pane.</span>
+                            </button>
+                            
+                            <!-- LIVE ACTION INTERFACE LINK -->
+                            <button onclick="executeAction('LIVE')" class="w-full text-left px-4 py-2 text-xs text-zinc-200 hover:bg-zinc-800/80 flex flex-col gap-0.5 group border-t border-zinc-800/60 mt-1 pt-2">
+                                <span class="font-semibold text-emerald-400 flex items-center gap-1.5">
+                                    LIVE <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                </span>
+                                <span class="text-[10px] text-zinc-400">Instantly patches modifications inside window context DOM tree every 5s following code keystrokes without workflow state loss or page reload.</span>
+                            </button>
+                            
+                            <!-- LIVE WITH TOOLS ACTION INTERFACE LINK -->
+                            <button onclick="executeAction('LIVE_WITH_TOOLS')" class="w-full text-left px-4 py-2 text-xs text-zinc-200 hover:bg-zinc-800/80 flex flex-col gap-0.5 group">
+                                <span class="font-semibold text-emerald-400 flex items-center gap-1.5">
+                                    LIVE WITH TOOLS <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                </span>
+                                <span class="text-[10px] text-zinc-400">Hot reactive updates framework tracking code updates live without refreshing, attached to comprehensive instrumentation panels.</span>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- WORKSPACE MAIN COMPONENT LAYOUT ARCHITECTURE HOOK -->
+                <div class="flex-1 w-full flex flex-row overflow-hidden">
+                    
+                    <!-- SIDEBAR PANEL TREE VIEW (GitHub Style Repository Content Manager Pane) -->
+                    <aside class="w-64 border-r border-zinc-800 bg-zinc-900/20 flex flex-col shrink-0 select-none">
+                        <!-- Section Heading Node Interface Container Header Info Block -->
+                        <div class="p-3.5 border-b border-zinc-800/80 flex items-center justify-between bg-zinc-900/10">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">Workspace Files</span>
+                            <button onclick="promptCreateFile()" class="p-1 rounded text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition" title="Add File to Project Tree Architecture">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                        </div>
+
+                        <!-- Directory Navigation Hierarchy Tree System Rendering Matrix Loop -->
+                        <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
+                            ${projectFileList.map(filename => {
+                                const isEntry = filename === 'index.html';
+                                const isActive = filename === state.activeFileName;
+                                return `
+                                    <div class="group flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition ${
+                                        isActive ? 'bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/40' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                                    }" onclick="switchFile('${filename}')">
+                                        <div class="flex items-center gap-2 truncate pr-2">
+                                            <!-- File Icon Mapping Strategy Block Matrix Indicator -->
+                                            <svg class="w-3.5 h-3.5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-zinc-500'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                            </svg>
+                                            <span class="truncate ${isEntry ? 'font-semibold tracking-wide' : ''}">${filename}</span>
+                                            ${isEntry ? `<span class="text-[9px] bg-zinc-900 border border-zinc-700/60 px-1 rounded text-zinc-400 font-mono transform scale-90">main</span>` : ''}
+                                        </div>
+                                        <!-- Actions available on files outside core required application entrypoints -->
+                                        ${!isEntry ? `
+                                            <button onclick="deleteFile(event, '${filename}')" class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition" title="Delete File From Disk">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </aside>
+
+                    <!-- CODE EDITING WORK BENCH REGION (Rich Visual Line Number Editor Container Interface) -->
+                    <main class="flex-1 h-full flex flex-col bg-zinc-950 overflow-hidden relative">
+                        <!-- Context Action Workspace Status bar panel overlay indicator row -->
+                        <div class="h-9 border-b border-zinc-800/80 bg-zinc-900/30 px-4 flex items-center justify-between text-xs text-zinc-400 shrink-0 select-none">
+                            <div class="flex items-center gap-1.5 font-mono text-[11px]">
+                                <span class="text-zinc-500">workspace /</span>
+                                <span class="text-zinc-300 font-medium">${activeProject ? activeProject.name : 'Unknown'}</span>
+                                <span class="text-zinc-600">/</span>
+                                <span class="text-emerald-400 font-semibold">${state.activeFileName}</span>
+                            </div>
+                            <div class="text-[10px] uppercase font-mono tracking-wider bg-zinc-900 px-2.5 py-0.5 rounded-md border border-zinc-800 text-zinc-400">
+                                ${state.activeFileName ? state.activeFileName.split('.').pop() : 'txt'} IDE ENGINE
+                            </div>
+                        </div>
+
+                        <!-- Core Document Code Input Workspace Wrapper Panel View Block -->
+                        <div class="flex-1 w-full flex flex-row overflow-hidden p-1 bg-zinc-950 relative">
+                            <!-- Line Counter Stream Panel Gutter Container Matrix -->
+                            <div id="line-gutter" class="w-12 py-3 select-none text-right font-mono text-xs text-zinc-600 pr-3 border-r border-zinc-900/60 bg-zinc-950/40 pointer-events-none line-clamp-none h-full overflow-hidden leading-6">
+                                1
+                            </div>
+                            <!-- Core Input Workspace Textarea Node Block -->
+                            <textarea id="code-editor-textarea" oninput="handleEditorInput(this.value)" onscroll="syncEditorGutterScroll()" class="flex-1 h-full bg-transparent text-zinc-200 p-3 pt-3 font-mono text-xs focus:outline-none resize-none leading-6 whitespace-pre overflow-x-auto overflow-y-auto selection:bg-zinc-800" spellcheck="false" placeholder="Write code here...">${currentFileContent}</textarea>
+                        </div>
+                    </main>
+                </div>
+            `;
+            
+            // Build dynamic text editing interface line array indicators instantly on render runtime step block
+            updateLineCounter();
+        }
+
+        // --- CODE EDITOR LOGIC & AUTO-SAVE FRAMEWORK ---
+        function updateLineCounter() {
+            const textarea = document.getElementById('code-editor-textarea');
+            const gutter = document.getElementById('line-gutter');
+            if (!textarea || !gutter) return;
+
+            const lines = textarea.value.split('\n').length;
+            let lineStr = '';
+            for (let i = 1; i <= lines; i++) {
+                lineStr += i + '<br>';
+            }
+            gutter.innerHTML = lineStr;
+        }
+
+        function syncEditorGutterScroll() {
+            const textarea = document.getElementById('code-editor-textarea');
+            const gutter = document.getElementById('line-gutter');
+            if (textarea && gutter) {
+                gutter.scrollTop = textarea.scrollTop;
+            }
+        }
+
+        function handleEditorInput(val) {
+            updateLineCounter();
+            
+            // Live-sync immediate buffer caching logic
+            state.projects[state.activeProjectId].files[state.activeFileName] = val;
+            
+            const statusText = document.getElementById('save-status-text');
+            if (statusText) {
+                statusText.innerText = 'Typing... Waiting to commit';
+                statusText.classList.remove('text-zinc-500');
+                statusText.classList.add('text-amber-400');
+            }
+
+            // AUTO-SAVE LOGIC PIPELINE: Instantly updates data repository precisely 5 seconds following key modifications
+            clearTimeout(state.autoSaveTimer);
+            state.autoSaveTimer = setTimeout(() => {
+                saveStateToStorage();
+                state.lastSaveTime = new Date().toLocaleTimeString();
+                
+                const currentStatus = document.getElementById('save-status-text');
+                if (currentStatus) {
+                    currentStatus.innerText = `Auto-saved at ${state.lastSaveTime}`;
+                    currentStatus.classList.remove('text-amber-400');
+                    currentStatus.classList.add('text-emerald-400');
+                    setTimeout(() => {
+                        currentStatus.classList.remove('text-emerald-400');
+                        currentStatus.classList.add('text-zinc-500');
+                    }, 2000);
+                }
+                showToast('Changes committed securely to database file context', 'info');
+            }, 5000);
+        }
+
+        // --- Dropdown Trigger Subsystem ---
+        function toggleDropdown(e) {
+            e.stopPropagation();
+            state.isDropdownOpen = !state.isDropdownOpen;
+            const panel = document.getElementById('run-dropdown-panel');
+            if (panel) {
+                if (state.isDropdownOpen) {
+                    panel.classList.remove('hidden', 'scale-95', 'opacity-0');
+                    panel.classList.add('block', 'scale-100', 'opacity-100');
+                } else {
+                    panel.classList.remove('block', 'scale-100', 'opacity-100');
+                    panel.classList.add('hidden', 'scale-95', 'opacity-0');
+                }
+            }
+        }
+
+        // Close runtime options dropdown automatically upon clicking alternative window content fields
+        window.addEventListener('click', () => {
+            if (state.isDropdownOpen) {
+                state.isDropdownOpen = false;
+                const panel = document.getElementById('run-dropdown-panel');
+                if (panel) {
+                    panel.classList.remove('block', 'scale-100', 'opacity-100');
+                    panel.classList.add('hidden', 'scale-95', 'opacity-0');
+                }
+            }
+        });
+
+        // --- ACTION HANDLER PIPELINE (NEW ISOLATED WINDOW EXECUTION RUNTIME) ---
+        function executeAction(mode) {
+            // Commit active editor text block state directly prior to system instantiation loop
+            saveStateToStorage();
+            
+            // Build absolute path targeting internal project routing index pipeline matrix
+            let targetURL = window.location.origin + window.location.pathname;
+            
+            // Configure structural query flags based on execution dropdown target context parameters
+            let routeParams = `run?=t,project=${state.activeProjectId}`;
+            
+            if (mode === 'RELOAD_WITH_TOOLS') {
+                routeParams += `,tools=true`;
+            } else if (mode === 'LIVE') {
+                routeParams += `,live=true`;
+            } else if (mode === 'LIVE_WITH_TOOLS') {
+                routeParams += `,tools=true,live=true`;
+            }
+
+            const completeTargetLink = `${targetURL}#${routeParams}`;
+            
+            // CONSTRAINT FULFILLMENT: Creates a strict modern popup window window layer construct rather than native browser window tabs
+            const runtimePopupProps = "width=1024,height=768,menubar=no,status=no,toolbar=no,location=no,scrollbars=yes,resizable=yes";
+            const spawnedWindowRef = window.open(completeTargetLink, `Sandbox_Runtime_${state.activeProjectId}_${mode}`, runtimePopupProps);
+            
+            if (spawnedWindowRef) {
+                showToast(`Launched runtime environment window stream successfully [Mode: ${mode}]`, 'success');
+            } else {
+                showToast('Popup blocker prevented standalone execution environment frame from opening.', 'info');
+            }
+        }
+
+        // --- PROJECT ELEMENT MODIFICATION MANAGEMENT ---
+        function switchProject(id) {
+            state.activeProjectId = id;
+            state.activeFileName = Object.keys(state.projects[id].files)[0] || 'index.html';
+            renderEditorMode();
+            showToast(`Switched active environment context view stack container`, 'info');
+        }
+
+        function promptCreateProject() {
+            // Modern fallback dialog replacement container execution block element mockup interface setup directly
+            const projectNameInput = prompt("Enter clean descriptive structural tag name identifier for container project:");
+            if (!projectNameInput || projectNameInput.trim() === "") return;
+
+            const nextProjId = 'proj-' + Date.now();
+            state.projects[nextProjId] = {
+                id: nextProjId,
+                name: projectNameInput.trim(),
+                files: { ...defaultFiles },
+                createdAt: new Date().toISOString()
+            };
+            
+            saveStateToStorage();
+            state.activeProjectId = nextProjId;
+            state.activeFileName = 'index.html';
+            renderEditorMode();
+            showToast('Initialized fresh sandboxed container architecture environment stack', 'success');
+        }
+
+        function promptDeleteProject() {
+            if (Object.keys(state.projects).length <= 1) {
+                alert("Cannot delete primary runtime workspace container. At least one context root environment profile context layer must remain active.");
+                return;
+            }
+            const currentProj = state.projects[state.activeProjectId];
+            if (!confirm(`Are you absolutely sure you want to completely destroy project repository workspace "${currentProj.name}" from internal memory storage container?`)) return;
+
+            delete state.projects[state.activeProjectId];
+            saveStateToStorage();
+            
+            state.activeProjectId = Object.keys(state.projects)[0];
+            state.activeFileName = Object.keys(state.projects[state.activeProjectId].files)[0] || 'index.html';
+            renderEditorMode();
+            showToast('Cleaned targeted file project profile system architecture records completely.', 'info');
+        }
+
+        // --- PROJECT FILE SYSTEM EDITING LOGIC ACTIONS ---
+        function switchFile(filename) {
+            state.activeFileName = filename;
+            renderEditorMode();
+        }
+
+        function promptCreateFile() {
+            const fileNameInput = prompt("Enter exact filename label parameters destination target (e.g. scripts.js, dashboard.html):");
+            if (!fileNameInput || fileNameInput.trim() === "") return;
+            
+            const normalizedName = fileNameInput.trim();
+            const projectFiles = state.projects[state.activeProjectId].files;
+            
+            if (projectFiles[normalizedName]) {
+                alert("A file entity matching that designation parameter tag string already exists inside this workspace cluster context.");
+                return;
+            }
+
+            // Seed empty blueprint contents into targeted element placeholder bounds
+            let fileExt = normalizedName.split('.').pop().toLowerCase();
+            let templateContent = `/* New ${fileExt.toUpperCase()} Module Entry Point */`;
+            if (fileExt === 'html' || fileExt === 'htm') {
+                templateContent = `<!-- Dynamic Component File Block -->\n<div class="p-4 bg-zinc-900 text-zinc-100 rounded-xl">\n    <h3>New View Panel</h3>\n</div>`;
+            }
+
+            projectFiles[normalizedName] = templateContent;
+            saveStateToStorage();
+            state.activeFileName = normalizedName;
+            renderEditorMode();
+            showToast(`Created file node "${normalizedName}" inside workspace cluster repository`, 'success');
+        }
+
+        function deleteFile(event, filename) {
+            event.stopPropagation(); // Avoid triggering switchFile lifecycle execution route assignment actions on wrapper click bounds
+            if (filename === 'index.html') return; // Immutable system base runtime asset allocation target layer file context rule protection parameter
+            
+            if (!confirm(`Confirm deletion workflow processing pass for file entity: "${filename}"?`)) return;
+
+            delete state.projects[state.activeProjectId].files[filename];
+            saveStateToStorage();
+            
+            if (state.activeFileName === filename) {
+                state.activeFileName = 'index.html';
+            }
+            renderEditorMode();
+            showToast(`Purged target file layout element cleanly from system storage context matrix`, 'info');
+        }
+
+        // --- APP LIFE CYCLE LISTENERS INITIALIZATION SYSTEM ROUTER BOOTSTRAP ---
+        window.addEventListener('hashchange', router);
+        window.addEventListener('load', () => {
+            loadState();
+            router();
+        });
+    </script>
+</body>
+</html>
