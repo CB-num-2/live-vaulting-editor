@@ -47,221 +47,15 @@
             'index.html': `<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Sandbox System</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link rel="stylesheet" href="assets/styles.css">
+    <meta charset="">
+    <meta name="" content="">
+    <title></title>
+    <script src=""><\/script>
+    <link rel="" href="">
 </head>
-<body class="bg-zinc-950 text-zinc-50 min-h-screen flex flex-col items-center justify-center p-8">
-    <div class="max-w-xl w-full bg-zinc-900 border border-zinc-800 p-8 rounded-2xl shadow-2xl space-y-6">
-        <div class="flex items-center gap-3">
-            <span class="text-3xl">📂</span>
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-emerald-400">Reactive Multi-File Sandbox</h1>
-                <p class="text-xs text-zinc-400 font-mono">Status: Connected to Runtime Environment</p>
-            </div>
-        </div>
-        
-        <p class="text-sm text-zinc-300 leading-relaxed">
-            This runtime project supports nested folders, automatic content preservation pools, and a live DOM patch runtime framework.
-        </p>
-
-        <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2">
-            <span class="text-xs uppercase font-bold text-zinc-500 tracking-wider">Dynamic State Evaluation</span>
-            <div class="flex items-center justify-between">
-                <button onclick="incrementCounter()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs px-4 py-2 rounded-lg font-medium transition">
-                    Trigger Interaction
-                </button>
-                <div id="counter-display" class="text-sm font-mono text-zinc-400">Total clicks: 0</div>
-            </div>
-        </div>
-    </div>
-
-    <script src="scripts/main.js"><\/script>
+<body>
 </body>
-</html>`,
-            'assets/styles.css': `/* Application Interface Styling Matrix */
-body {
-    background-color: #09090b;
-    letter-spacing: -0.01em;
-}`,
-            'scripts/main.js': `// Standard Application Logic Execution Frame
-let clickCount = 0;
-function incrementCounter() {
-    clickCount++;
-    const label = document.getElementById('counter-display');
-    if (label) {
-        label.innerText = 'Total clicks: ' + clickCount;
-    }
-}`
-        };
-
-        // --- GLOBAL APP STATE CONTROL ---
-        let state = {
-            projects: {},
-            activeProjectId: null,
-            activeFileName: null,
-            currentView: 'HOME', // 'HOME' | 'EDITOR' | 'RUN' | 'SETTINGS'
-            isRunDropdownOpen: false,
-            expandedFolders: { 'assets': true, 'scripts': true },
-            autoSaveTimer: null,
-            lastSaveTime: null,
-            settings: {
-                editorFontSize: '12px',
-                themeMode: 'dark',
-                tabSize: 4,
-                liveUpdateInterval: 5000 // default configured parameter scope (5 seconds)
-            },
-            
-            // Autocomplete configuration maps
-            autocomplete: {
-                suggestions: ['div', 'span', 'section', 'p', 'a', 'h1', 'h2', 'h3', 'script', 'style', 'link', 'class', 'id', 'function', 'const', 'let', 'console.log', 'document.getElementById', 'addEventListener', 'flex', 'grid', 'bg-zinc-900', 'text-emerald-400'],
-                visible: false,
-                filtered: [],
-                activeIndex: 0,
-                query: ''
-            }
-        };
-
-        // --- SUBSYSTEM INITIALIZATION & PERSISTENCE ---
-        function loadApplicationData() {
-            const data = localStorage.getItem(STORAGE_KEY);
-            if (data) {
-                try {
-                    state.projects = JSON.parse(data);
-                } catch (e) {
-                    state.projects = {};
-                }
-            }
-            const settingsData = localStorage.getItem(STORAGE_KEY + '_settings');
-            if (settingsData) {
-                try { state.settings = { ...state.settings, ...JSON.parse(settingsData) }; } catch (e) {}
-            }
-        }
-
-        function commitStateToDisk() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
-            localStorage.setItem(STORAGE_KEY + '_settings', JSON.stringify(state.settings));
-            window.dispatchEvent(new Event('sandbox_state_mutated_local'));
-        }
-
-        // --- PROGRAMMATIC MESSAGING (TOAST CONSOLE) ---
-        function triggerToast(text, status = 'success') {
-            const container = document.getElementById('toast-container');
-            if (!container) return;
-
-            const notification = document.createElement('div');
-            notification.className = `flex items-center gap-3 p-3.5 rounded-xl border shadow-2xl transition-all duration-300 transform translate-y-3 opacity-0 text-xs font-mono font-medium ${
-                status === 'success' ? 'bg-zinc-900 border-emerald-500/20 text-emerald-400' :
-                status === 'info' ? 'bg-zinc-900 border-zinc-800 text-zinc-300' :
-                'bg-zinc-900 border-rose-500/20 text-rose-400'
-            }`;
-
-            notification.innerHTML = `
-                <span>${status === 'success' ? '⚡' : '⚙️'}</span>
-                <span class="flex-1">${text}</span>
-            `;
-
-            container.appendChild(notification);
-            setTimeout(() => notification.classList.remove('translate-y-3', 'opacity-0'), 40);
-
-            setTimeout(() => {
-                notification.classList.add('opacity-0', '-translate-y-2');
-                setTimeout(() => notification.remove(), 300);
-            }, 3500);
-        }
-
-        // --- ROOT CORE ROUTER ENGINE ---
-        function evaluateRouteEnvironment() {
-            const pathHash = window.location.hash;
-            const targetContainer = document.getElementById('app-root');
-            if (!targetContainer) return;
-
-            if (pathHash.includes('run?=t')) {
-                const matchedId = pathHash.match(/project=([^,]+)/);
-                const projectId = matchedId ? matchedId[1] : null;
-                const isLiveMode = pathHash.includes(',live=true');
-                const containsTools = pathHash.includes(',tools=true');
-
-                renderStandAloneRuntimeView(projectId, isLiveMode, containsTools);
-            } else {
-                if (state.currentView === 'HOME') {
-                    renderDashboardView();
-                } else if (state.currentView === 'SETTINGS') {
-                    renderSettingsView();
-                } else {
-                    renderEditorWorkspaceView();
-                }
-            }
-        }
-
-        // --- VIEW 1: CENTRAL PROJECT DASHBOARD HOME SCREEN ---
-        function renderDashboardView() {
-            loadApplicationData();
-            state.currentView = 'HOME';
-            const root = document.getElementById('app-root');
-
-            root.className = "w-full h-screen bg-zinc-950 flex flex-col justify-between overflow-y-auto p-6 md:p-12 select-none";
-            root.innerHTML = `
-                <div class="max-w-5xl w-full mx-auto space-y-10">
-                    <!-- Dashboard Header -->
-                    <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-900 pb-6 gap-4">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-2">
-                                <div class="w-6 h-6 rounded bg-emerald-500 flex items-center justify-center font-bold text-zinc-950 font-mono text-xs shadow-md shadow-emerald-500/20">S</div>
-                                <h1 class="text-lg font-bold tracking-tight text-zinc-100 font-mono">DevSandbox Pro</h1>
-                            </div>
-                            <p class="text-xs text-zinc-400">Local Multi-Project Component Sandbox Workspace Environment</p>
-                        </div>
-                        
-                        <div class="flex items-center gap-2">
-                            <button onclick="navigateToSettings()" class="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-bold px-4 py-2 rounded-xl transition duration-150">
-                                Settings
-                            </button>
-                            <button onclick="createNewProjectDashboardAction()" class="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-xs font-bold px-4 py-2 rounded-xl transition duration-150 shadow-lg shadow-emerald-500/10 flex items-center gap-1.5">
-                                <span>+</span> Create New Project
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Repository Selection Matrix Layout -->
-                    <div class="space-y-3">
-                        <h2 class="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">Active Architecture Projects</h2>
-                        
-                        ${Object.keys(state.projects).length === 0 ? `
-                            <div class="border border-dashed border-zinc-800 rounded-2xl p-12 text-center space-y-2">
-                                <div class="text-2xl text-zinc-600">📁</div>
-                                <p class="text-sm text-zinc-400 font-mono">No projects found. Minimum bounds configured to 0.</p>
-                                <button onclick="createNewProjectDashboardAction()" class="text-xs text-emerald-400 underline hover:text-emerald-300 transition">Create your first sandbox</button>
-                            </div>
-                        ` : `
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="project-matrix-grid">
-                                ${Object.keys(state.projects).map(id => {
-                                    const proj = state.projects[id];
-                                    const count = Object.keys(proj.files).length;
-                                    return `
-                                        <div class="bg-zinc-900/40 border border-zinc-900 hover:border-zinc-800 p-5 rounded-2xl flex flex-col justify-between gap-5 transition duration-150 group">
-                                            <div class="space-y-1.5 cursor-pointer flex-1" onclick="openProjectWorkspace('${id}')">
-                                                <div class="flex items-center justify-between">
-                                                    <h3 class="text-sm font-semibold text-zinc-200 group-hover:text-emerald-400 transition truncate max-w-[240px]">${proj.name}</h3>
-                                                    <span class="text-[10px] font-mono bg-zinc-950 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">${count} tracking file(s)</span>
-                                                </div>
-                                                <p class="text-[11px] text-zinc-500 font-mono">UUID: ${id}</p>
-                                            </div>
-                                            
-                                            <!-- Actions Suite panel row -->
-                                            <div class="flex items-center justify-end gap-2 border-t border-zinc-900/60 pt-3">
-                                                <button onclick="renameProjectDashboardAction('${id}')" class="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800/80 px-2.5 py-1.5 rounded-lg transition">
-                                                    Rename
-                                                </button>
-                                                <button onclick="deleteProjectDashboardAction('${id}')" class="text-[11px] font-mono text-rose-400/80 hover:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/10 px-2.5 py-1.5 rounded-lg transition">
-                                                    Delete Project
-                                                </button>
-                                            </div>
-                                        </div>
-                                    `;
-                                }).join('')}
+</html>`;}).join('')}
                             </div>
                         `}
                     </div>
@@ -370,6 +164,8 @@ function incrementCounter() {
                         <div class="space-y-2">
                             <label class="text-xs text-zinc-400 block">Live Auto-Save Sync Interval</label>
                             <select id="setting-live-interval" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none">
+                                <option value="1000" ${state.settings.liveUpdateInterval === 50 ? 'selected' : ''}>0.05 Second (TOO Aggressive Sync)</option>
+                                <option value="1000" ${state.settings.liveUpdateInterval === 100 ? 'selected' : ''}>0.1 Second (Extreme Aggressive Sync)</option>
                                 <option value="1000" ${state.settings.liveUpdateInterval === 1000 ? 'selected' : ''}>1 Second (Aggressive Sync)</option>
                                 <option value="2000" ${state.settings.liveUpdateInterval === 2000 ? 'selected' : ''}>2 Seconds (Frequent Sync)</option>
                                 <option value="5000" ${state.settings.liveUpdateInterval === 5000 ? 'selected' : ''}>5 Seconds (Standard Default)</option>
