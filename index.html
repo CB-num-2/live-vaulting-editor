@@ -186,18 +186,6 @@
             commitStateToDisk();
             triggerToast('Global parameters synced clean');
             returnToDashboardHome();
-            if (!state.isSaving) {
-    state.autoSaveTimer = setTimeout(async () => {
-        state.isSaving = true;
-        
-        await commitStateToDisk(); // Ensure this is awaited if it returns a promise!
-        state.lastSaveTime = new Date().toLocaleTimeString();
-        
-        // Update your badges...
-        
-        state.isSaving = false;
-    }, state.settings.liveUpdateInterval);
-}
         }
 
         // --- VIEW 3: FULL FEATURED PLATFORM EDITOR / WORKSPACE MANAGER ---
@@ -588,8 +576,11 @@
 
             clearTimeout(state.autoSaveTimer);
             // DYNAMICALLY RESOLVED AUTO-SAVE THROTTLE DEBOUNCE INTERVAL RANGE VALUE FROM STATE PROPERTIES
-            state.autoSaveTimer = setTimeout(() => {
-                commitStateToDisk();
+        if (!state.isSaving) {
+            state.autoSaveTimer = setTimeout(async () => {
+                state.isSaving = true;
+                
+                await commitStateToDisk();
                 state.lastSaveTime = new Date().toLocaleTimeString();
                 
                 const verifiedBadge = document.getElementById('save-indicator-badge');
@@ -597,6 +588,8 @@
                     verifiedBadge.innerText = `Auto-saved at ${state.lastSaveTime}`;
                     verifiedBadge.className = 'text-[10px] text-emerald-400 font-mono';
                 }
+                
+                state.isSaving = false;
             }, state.settings.liveUpdateInterval);
         }
 
