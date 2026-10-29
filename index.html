@@ -154,8 +154,8 @@
                         <div class="space-y-2">
                             <label class="text-xs text-zinc-400 block">Live Auto-Save Sync Interval</label>
                             <select id="setting-live-interval" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none">
-                                <option value="1000" ${state.settings.liveUpdateInterval === 50 ? 'selected' : ''}>0.05 Second (TOO Aggressive Sync)</option>
-                                <option value="1000" ${state.settings.liveUpdateInterval === 100 ? 'selected' : ''}>0.1 Second (Extreme Aggressive Sync)</option>
+                                <option value="50" ${state.settings.liveUpdateInterval === 50 ? 'selected' : ''}>0.05 Second (TOO Aggressive Sync)</option>
+                                <option value="100" ${state.settings.liveUpdateInterval === 100 ? 'selected' : ''}>0.1 Second (Extreme Aggressive Sync)</option>
                                 <option value="1000" ${state.settings.liveUpdateInterval === 1000 ? 'selected' : ''}>1 Second (Aggressive Sync)</option>
                                 <option value="2000" ${state.settings.liveUpdateInterval === 2000 ? 'selected' : ''}>2 Seconds (Frequent Sync)</option>
                                 <option value="5000" ${state.settings.liveUpdateInterval === 5000 ? 'selected' : ''}>5 Seconds (Standard Default)</option>
