@@ -44,57 +44,7 @@
         const STORAGE_KEY = 'dev_sandbox_pro_projects_v2';
         
         const defaultProjectFiles = {
-            'index.html': `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Sandbox System</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link rel="stylesheet" href="assets/styles.css">
-</head>
-<body class="bg-zinc-950 text-zinc-50 min-h-screen flex flex-col items-center justify-center p-8">
-    <div class="max-w-xl w-full bg-zinc-900 border border-zinc-800 p-8 rounded-2xl shadow-2xl space-y-6">
-        <div class="flex items-center gap-3">
-            <span class="text-3xl">📂</span>
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-emerald-400">Reactive Multi-File Sandbox</h1>
-                <p class="text-xs text-zinc-400 font-mono">Status: Connected to Runtime Environment</p>
-            </div>
-        </div>
-        
-        <p class="text-sm text-zinc-300 leading-relaxed">
-            This runtime project supports nested folders, automatic content preservation pools, and a live DOM patch runtime framework.
-        </p>
-
-        <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2">
-            <span class="text-xs uppercase font-bold text-zinc-500 tracking-wider">Dynamic State Evaluation</span>
-            <div class="flex items-center justify-between">
-                <button onclick="incrementCounter()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs px-4 py-2 rounded-lg font-medium transition">
-                    Trigger Interaction
-                </button>
-                <div id="counter-display" class="text-sm font-mono text-zinc-400">Total clicks: 0</div>
-            </div>
-        </div>
-    </div>
-
-    <script src="scripts/main.js"><\/script>
-</body>
-</html>`,
-            'assets/styles.css': `/* Application Interface Styling Matrix */
-body {
-    background-color: #09090b;
-    letter-spacing: -0.01em;
-}`,
-            'scripts/main.js': `// Standard Application Logic Execution Frame
-let clickCount = 0;
-function incrementCounter() {
-    clickCount++;
-    const label = document.getElementById('counter-display');
-    if (label) {
-        label.innerText = 'Total clicks: ' + clickCount;
-    }
-}`
+            'index.html': ``
         };
 
         // --- GLOBAL APP STATE CONTROL ---
